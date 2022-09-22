@@ -124,12 +124,14 @@ class CacheManager implements BaseCacheManager {
         streamController.add(cacheFile);
         withProgress = false;
       }
+      print("_pushFileToStream 开始从Cache加载图片,$url cacheFile:$cacheFile");
     } catch (e) {
       cacheLogger.log(
           'CacheManager: Failed to load cached file for $url with error:\n$e',
           CacheManagerLogLevel.debug);
     }
     if (cacheFile == null || cacheFile.validTill.isBefore(DateTime.now())) {
+      print("_pushFileToStream 开始从网络加载图片$url");
       try {
         await for (var response
             in _webHelper.downloadFile(url, key: key, authHeaders: headers)) {
@@ -217,6 +219,29 @@ class CacheManager implements BaseCacheManager {
     return file;
   }
 
+  @override
+  Future<void> updateCacheFilePath(
+    String url,
+    String cacheFilePath,
+    int fileLength, {
+    String? key,
+    Duration maxAge = const Duration(days: 30),
+    String fileExtension = 'file',
+  }) async {
+    key ??= url;
+    var cacheObject = await _store.retrieveCacheData(key);
+    cacheObject ??= CacheObject(
+      url,
+      key: key,
+      relativePath: '${const Uuid().v1()}.$fileExtension',
+      validTill: DateTime.now().add(maxAge),
+    );
+
+    var newCacheObject =
+        cacheObject.copyWith(relativePath: cacheFilePath, length: fileLength);
+    unawaited(_store.putFile(newCacheObject));
+  }
+
   /// Put a byte stream in the cache. When using an existing file you can use
   /// file.openRead(). It is recommended to specify  the [eTag] and the
   /// [maxAge]. When [maxAge] is passed and the eTag is not set the file will
@@ -251,7 +276,7 @@ class CacheManager implements BaseCacheManager {
     // Always copy file
     var sink = file.openWrite();
     await source
-        // this map is need to map UInt8List to List<int>
+    // this map is need to map UInt8List to List<int>
         .map((event) => event)
         .pipe(sink);
 

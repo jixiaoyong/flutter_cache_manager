@@ -30,7 +30,9 @@ class WebHelper {
   final Queue<QueueItem> _queue = Queue();
 
   // all downloading file size
-  static const MAX_DOWNLOADING_FILE_SIZE_BYTE = 200 * 1024 * 1024; //200mb
+  static const MAX_DOWNLOADING_FILE_SIZE_BYTE = 50 * 1024 * 1024; //50mb
+  // max pending download task count, remove first (old) if more than this
+  static const MAX_PENDING_DOWNLOADING_COUNT = 50;
   int downloadingFileSizeByte = 0;
 
   ///Download the file from the url
@@ -41,6 +43,8 @@ class WebHelper {
     key ??= url;
     var subject = _memCache[key];
     if (subject == null || ignoreMemCache) {
+      cacheLogger.log('downloadFile CacheManager: Downloading $url',
+          CacheManagerLogLevel.verbose);
       subject = BehaviorSubject<FileResponse>();
       _memCache[key] = subject;
       unawaited(_downloadOrAddToQueue(url, key, authHeaders));
@@ -56,15 +60,22 @@ class WebHelper {
     Map<String, String>? authHeaders,
   ) async {
     cacheLogger.log(
-        'CacheManager: Downloading $url, current downloading size :${downloadingFileSizeByte / 1024 / 1024}Mb',
-        CacheManagerLogLevel.verbose);
+        'CacheManager: Downloading $url, current downloading size :${downloadingFileSizeByte.toMb()}Mb',
+        CacheManagerLogLevel.debug);
     //Add to queue if there are too many calls.
-    if (concurrentCalls >= fileFetcher.concurrentFetches &&
-        downloadingFileSizeByte < MAX_DOWNLOADING_FILE_SIZE_BYTE) {
+    if (concurrentCalls >= fileFetcher.concurrentFetches ||
+        downloadingFileSizeByte >= MAX_DOWNLOADING_FILE_SIZE_BYTE) {
       print(
           "concurrentCalls >= fileFetcher.concurrentFetches:${concurrentCalls >= fileFetcher.concurrentFetches}||"
-          "downloadingFileSizeByte($downloadingFileSizeByte) "
+          "downloadingFileSizeByte(${downloadingFileSizeByte.toMb()}Mb) "
           "< MAX_DOWNLOADING_FILE_SIZE_BYTE:${downloadingFileSizeByte < MAX_DOWNLOADING_FILE_SIZE_BYTE},添加到queue，url：$url");
+
+      if (_queue.length >= MAX_PENDING_DOWNLOADING_COUNT) {
+        var task = _queue.removeFirst();
+        cacheLogger.log(
+            'CacheManager: Downloading $url, pending task more than $MAX_PENDING_DOWNLOADING_COUNT, drop task:${task.key}',
+            CacheManagerLogLevel.debug);
+      }
       _queue.add(QueueItem(url, key, authHeaders));
       return;
     }
@@ -90,7 +101,7 @@ class WebHelper {
 
   void _checkQueue() {
     if (_queue.isEmpty) return;
-    var next = _queue.removeFirst();
+    var next = _queue.removeLast();
     _downloadOrAddToQueue(next.url, next.key, next.headers);
   }
 
@@ -141,7 +152,7 @@ class WebHelper {
 
     downloadingFileSizeByte += response.contentLength ?? 0;
     print(
-        " response.contentLength:${response.contentLength},downloadingFileSizeByte:$downloadingFileSizeByte");
+        "response.contentLength:${response.contentLength},downloadingFileSizeByte:${downloadingFileSizeByte.toMb()}mb");
 
     final oldCacheObject = cacheObject;
     var newCacheObject = _setDataFromHeaders(cacheObject, response);
@@ -151,7 +162,7 @@ class WebHelper {
         if (response.contentLength == null) {
           downloadingFileSizeByte += progress - savedBytes;
           print(
-              " response.contentLength:${progress},downloadingFileSizeByte:$downloadingFileSizeByte");
+              "_saveFile.progress:${progress},downloadingFileSizeByte:${downloadingFileSizeByte.toMb()}mb");
         }
 
         savedBytes = progress;
@@ -245,4 +256,12 @@ class HttpExceptionWithStatus extends HttpException {
   const HttpExceptionWithStatus(this.statusCode, String message, {Uri? uri})
       : super(message, uri: uri);
   final int statusCode;
+}
+
+const int mb = 1024 * 1024;
+
+extension on int {
+  toMb() {
+    return this / mb;
+  }
 }
