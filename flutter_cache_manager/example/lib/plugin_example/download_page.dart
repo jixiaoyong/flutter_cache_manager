@@ -11,6 +11,7 @@ class DownloadPage extends StatelessWidget {
   final VoidCallback downloadFile;
   final VoidCallback clearCache;
   final VoidCallback removeFile;
+  final VoidCallback stopLoad;
 
   const DownloadPage({
     Key key,
@@ -18,6 +19,7 @@ class DownloadPage extends StatelessWidget {
     this.downloadFile,
     this.clearCache,
     this.removeFile,
+    this.stopLoad,
   }) : super(key: key);
 
   @override
@@ -47,7 +49,10 @@ class DownloadPage extends StatelessWidget {
 
         return Scaffold(
           appBar: null,
-          body: body,
+          body: BodyWidget(
+            child: body,
+            stopLoad: stopLoad,
+          ),
           floatingActionButton: !loading
               ? Fab(
                   downloadFile: downloadFile,
@@ -55,6 +60,32 @@ class DownloadPage extends StatelessWidget {
               : null,
         );
       },
+    );
+  }
+}
+
+class BodyWidget extends StatefulWidget {
+  const BodyWidget({Key key, this.child, this.stopLoad}) : super(key: key);
+
+  final Widget child;
+  final VoidCallback stopLoad;
+
+  @override
+  State<BodyWidget> createState() => _BodyWidgetState();
+}
+
+class _BodyWidgetState extends State<BodyWidget> {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(child: widget.child),
+        OutlinedButton(
+            onPressed: () {
+              widget.stopLoad();
+            },
+            child: Text(("Stop Loading")))
+      ],
     );
   }
 }

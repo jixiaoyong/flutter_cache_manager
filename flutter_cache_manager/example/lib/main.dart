@@ -14,7 +14,7 @@ void main() {
   CacheManager.logLevel = CacheManagerLogLevel.verbose;
 }
 
-const url = 'https://blurha.sh/assets/images/img1.jpg';
+const url = 'http://10.30.61.112:8080/scrcpy-win64-v1.14.zip';
 
 /// Example [Widget] showing the functionalities of flutter_cache_manager
 class CacheManagerPage extends StatefulWidget {
@@ -54,6 +54,7 @@ class _CacheManagerPageState extends State<CacheManagerPage> {
       downloadFile: _downloadFile,
       clearCache: _clearCache,
       removeFile: _removeFile,
+      stopLoad: _stopLoad,
     );
   }
 
@@ -75,5 +76,9 @@ class _CacheManagerPageState extends State<CacheManagerPage> {
     setState(() {
       fileStream = null;
     });
+  }
+
+  void _stopLoad() {
+    if (fileStream != null) {}
   }
 }

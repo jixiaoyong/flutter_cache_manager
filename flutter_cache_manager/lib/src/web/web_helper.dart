@@ -29,6 +29,10 @@ class WebHelper {
   final Map<String, BehaviorSubject<FileResponse>> _memCache;
   final Queue<QueueItem> _queue = Queue();
 
+  // all downloading file size
+  static const MAX_DOWNLOADING_FILE_SIZE_BYTE = 200 * 1024 * 1024; //200mb
+  int downloadingFileSizeByte = 0;
+
   ///Download the file from the url
   Stream<FileResponse> downloadFile(String url,
       {String? key,
@@ -45,13 +49,22 @@ class WebHelper {
   }
 
   var concurrentCalls = 0;
+
   Future<void> _downloadOrAddToQueue(
     String url,
     String key,
     Map<String, String>? authHeaders,
   ) async {
+    cacheLogger.log(
+        'CacheManager: Downloading $url, current downloading size :${downloadingFileSizeByte / 1024 / 1024}Mb',
+        CacheManagerLogLevel.verbose);
     //Add to queue if there are too many calls.
-    if (concurrentCalls >= fileFetcher.concurrentFetches) {
+    if (concurrentCalls >= fileFetcher.concurrentFetches &&
+        downloadingFileSizeByte < MAX_DOWNLOADING_FILE_SIZE_BYTE) {
+      print(
+          "concurrentCalls >= fileFetcher.concurrentFetches:${concurrentCalls >= fileFetcher.concurrentFetches}||"
+          "downloadingFileSizeByte($downloadingFileSizeByte) "
+          "< MAX_DOWNLOADING_FILE_SIZE_BYTE:${downloadingFileSizeByte < MAX_DOWNLOADING_FILE_SIZE_BYTE},添加到queue，url：$url");
       _queue.add(QueueItem(url, key, authHeaders));
       return;
     }
@@ -126,11 +139,21 @@ class WebHelper {
       );
     }
 
+    downloadingFileSizeByte += response.contentLength ?? 0;
+    print(
+        " response.contentLength:${response.contentLength},downloadingFileSizeByte:$downloadingFileSizeByte");
+
     final oldCacheObject = cacheObject;
     var newCacheObject = _setDataFromHeaders(cacheObject, response);
     if (statusCodesNewFile.contains(response.statusCode)) {
       var savedBytes = 0;
       await for (var progress in _saveFile(newCacheObject, response)) {
+        if (response.contentLength == null) {
+          downloadingFileSizeByte += progress - savedBytes;
+          print(
+              " response.contentLength:${progress},downloadingFileSizeByte:$downloadingFileSizeByte");
+        }
+
         savedBytes = progress;
         yield DownloadProgress(
             cacheObject.url, response.contentLength, progress);
@@ -147,6 +170,10 @@ class WebHelper {
     final file = await _store.fileSystem.createFile(
       newCacheObject.relativePath,
     );
+    var fileSize = await file.length();
+    downloadingFileSizeByte -= fileSize;
+    print(
+        " response.contentLength:${fileSize},downloadingFileSizeByte:$downloadingFileSizeByte");
     yield FileInfo(
       file,
       FileSource.Online,
