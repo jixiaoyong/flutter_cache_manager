@@ -119,12 +119,13 @@ class CacheManager implements BaseCacheManager {
     key ??= url;
     FileInfo? cacheFile;
     try {
+      // 这里是尝试从本地缓存读取未压缩的图片
       cacheFile = await getFileFromCache(key);
       if (cacheFile != null) {
         streamController.add(cacheFile);
         withProgress = false;
       }
-      print("_pushFileToStream 开始从Cache加载图片,$url cacheFile:$cacheFile");
+      print("_pushFileToStream 开始从Cache加载未压缩图片,$url cacheFile:$cacheFile");
     } catch (e) {
       cacheLogger.log(
           'CacheManager: Failed to load cached file for $url with error:\n$e',
@@ -290,6 +291,15 @@ class CacheManager implements BaseCacheManager {
     final cacheObject = await _store.retrieveCacheData(key);
     if (cacheObject?.id != null) {
       await _store.removeCachedFile(cacheObject!);
+    }
+  }
+
+  /// Remove a file from the memory cache
+  @override
+  Future<void> removeMemoryCache(String key) async {
+    final cacheObject = await _store.retrieveCacheData(key);
+    if (cacheObject?.id != null) {
+      await _store.removeCachedMemory(cacheObject!);
     }
   }
 

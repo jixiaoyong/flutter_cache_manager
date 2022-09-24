@@ -18,9 +18,12 @@ class CacheStore {
   FileSystem fileSystem;
 
   final Config _config;
+
   String get storeKey => _config.cacheKey;
   final Future<CacheInfoRepository> _cacheInfoRepository;
+
   int get _capacity => _config.maxNrOfCacheObjects;
+
   Duration get _maxAge => _config.stalePeriod;
 
   DateTime lastCleanupRun = DateTime.now();
@@ -169,8 +172,13 @@ class CacheStore {
     await provider.deleteAll(toRemove);
   }
 
-  Future<void> _removeCachedFile(
-      CacheObject cacheObject, List<int> toRemove) async {
+  Future<void> removeCachedMemory(CacheObject cacheObject) async {
+    final toRemove = <int>[];
+    await _removeCachedFile(cacheObject, toRemove, cleanFile: false);
+  }
+
+  Future<void> _removeCachedFile(CacheObject cacheObject, List<int> toRemove,
+      {bool cleanFile = true}) async {
     if (toRemove.contains(cacheObject.id)) return;
 
     toRemove.add(cacheObject.id!);
@@ -180,6 +188,11 @@ class CacheStore {
     if (_futureCache.containsKey(cacheObject.key)) {
       _futureCache.remove(cacheObject.key);
     }
+
+    if (!cleanFile) {
+      return;
+    }
+
     final file = await fileSystem.createFile(cacheObject.relativePath);
     if (await file.exists()) {
       await file.delete();
